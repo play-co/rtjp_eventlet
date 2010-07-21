@@ -151,12 +151,18 @@ class RTJPConnection(object):
     def _send_frame(self, id, buffer, ev):
         if not self._connected:
             ev.send_exception(Exception("Not Connected"))
+            return
         try:
             self._send_lock.acquire()
             self._sock.sendall(buffer)
             self.logger.debug('SENT %s: %s', self, repr(buffer))
         except Exception, e:
             self.logger.exception('%s Error sending payload %s', self, repr(buffer))
+            try:
+                self._sock.shutdown()
+                self._sock.close()
+            except:
+                pass
             ev.send_exception(*sys.exc_info())
         else:
             ev.send(id)
