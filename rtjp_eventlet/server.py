@@ -5,8 +5,9 @@ import logging
 import core
 import errors
 #from .. import core
-#logging.basicConfig()
 
+logging.basicConfig()
+logger = logging.getLogger('rtjp')
 
 class RTJPServer(object):
     logger = logging.getLogger("rtjp_eventlet.RTJPServer")
@@ -71,9 +72,6 @@ class RTJPConnection(object):
     def close(self):
         if self._connected:
             self._loop.kill()
-            self._sock.close()
-            self._sock = None
-            self._connected = False
         
     def _connect(self, host, port, ev):
         try:
@@ -115,6 +113,7 @@ class RTJPConnection(object):
                     self._frame_queue.put(frame)
             self.logger.debug('put Connection Lost in the queue')
             self._connected = False
+            self._sock.close()
             self._sock = None
             self._frame_queue.put(errors.ConnectionLost("Connection Lost"))
         except:
