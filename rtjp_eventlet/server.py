@@ -96,7 +96,7 @@ class RTJPConnection(object):
                     data = self._sock.recv(1024)
                     self.logger.debug('RECV %s: %s', self, repr(data))
                 except Exception, e:
-                    self.logger.exception('%s Error while reading from self._sock')
+                    self.logger.exception('%s Error while reading from self._sock', e)
                     break
                 if not data:
                     self.logger.debug('no data, breaking...')
@@ -124,7 +124,8 @@ class RTJPConnection(object):
     def recv_frame(self):
         ev = eventlet.event.Event()
         if self._frame_queue.qsize():
-            ev.send(self._frame_queue.get())
+            self._recv_frame(ev)
+            return ev
         else:
             eventlet.spawn(self._recv_frame, ev)
         return ev
@@ -132,6 +133,7 @@ class RTJPConnection(object):
     def _recv_frame(self, ev):
         frame = self._frame_queue.get()
         if isinstance(frame, Exception):
+            print 'frame is an exception', frame
             ev.send_exception(frame)
         else:
             ev.send(frame)
