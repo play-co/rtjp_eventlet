@@ -36,19 +36,11 @@ class RTJPServer(object):
             self._accept_queue.put(RTJPConnection(sock=sock, addr=addr))
             
     def accept(self):
-        ev = eventlet.event.Event()
-        if self._accept_queue.qsize():
-            ev.send(self._accept_queue.get())
-        else:
-            eventlet.spawn(self._accept, ev)
-        return ev
-        
-    def _accept(self, ev):
         conn = self._accept_queue.get()
         if isinstance(conn, Exception):
-            ev.send_exception(e)
+            raise conn
         else:
-            ev.send(conn)
+            return conn
 
 class RTJPConnection(object):
     logger = logging.getLogger('rtjp_eventlet.RTJPConnection')
@@ -56,87 +48,69 @@ class RTJPConnection(object):
         self.frame_id = 0
         self._frame_queue = eventlet.queue.Queue()
         self.delimiter = delimiter
-        self._sock = None
+        self._sock = sock
         self._addr = addr
-        self._loop = None
         self._send_lock = eventlet.semaphore.Semaphore()
-        if sock:
-            self._make_connection(sock)
+        self._active_loop = eventlet.spawn(self._loop)
         
     def connect(self, host, port):
-        self._connected = False
-        e = eventlet.event.Event()
-        eventlet.spawn(self._connect, host, port, e)
-        return e
+        self._connect(host, port)
         
     def close(self):
-        if self._connected:
-            self._loop.kill()
+        if self._active_loop:
+            self._active_loop.throw(errors.QuitLoop())
         
-    def _connect(self, host, port, ev):
-        try:
-            sock = eventlet.connect((host, port))
-            self._addr = (host, port)
-            self._make_connection(sock)
-        except Exception, e:
-            ev.send_exception(e)
-        else:
-            ev.send(None)
-        
-    def _make_connection(self, sock):
-        self._sock = sock
-        self._connected = True
-        self._loop = eventlet.spawn(self._read_forever)
-        
-    def _read_forever(self):
-        buffer = ""
-        try:
-            while True:
-                try:
-                    data = self._sock.recv(1024)
-                    self.logger.debug('RECV %s: %s', self, repr(data))
-                except Exception, e:
-                    self.logger.exception('%s Error while reading from self._sock', e)
-                    break
-                if not data:
-                    self.logger.debug('no data, breaking...')
-                    break;
-                buffer += data
-                while self.delimiter in buffer:
-                    raw_frame, buffer = buffer.split(self.delimiter, 1)
-                    try:
-                        frame = core.deserialize_frame(raw_frame)
-                    except core.RTJPParseException, e:
-                        self.send_error(e.id, str(e))
-                        continue
-                    self.logger.debug('RECV: %s, %s, %s' % tuple(frame))
-                    self._frame_queue.put(frame)
-            self.logger.debug('put Connection Lost in the queue')
-            self._connected = False
-            self._sock.close()
+    def _cleanup(self):
+        if self._active_loop:
+            loop = self._active_loop
+            self._active_loop = None
+            loop.throw(errors.QuitLoop())
+        if self._sock:
+            sock = self._sock
             self._sock = None
-            self._frame_queue.put(errors.ConnectionLost("Connection Lost"))
-        except:
-            logger.exception('%s Unknown exception while reading from sock', self)
-            self._loop = None
-            pass
+            sock.close()
+        
+    def _connect(self, host, port):
+        sock = eventlet.connect((host, port))
+        self._addr = (host, port)
+        self._make_connection(sock)
+        
+    def _loop(self):
+        buffer = ""
+        while True:
+            try:
+                data = self._sock.recv(1024)
+                self.logger.debug('RECV %s: %s', self, repr(data))
+            except errors.QuitLoop:
+                break
+            except Exception, e:
+                self.logger.error('%s Error while reading from self._sock', e, exc_info=True)
+                break
+            if not data:
+                self.logger.debug('no data, breaking...')
+                break;
+            buffer += data
+            while self.delimiter in buffer:
+                raw_frame, buffer = buffer.split(self.delimiter, 1)
+                try:
+                    frame = core.deserialize_frame(raw_frame)
+                except core.RTJPParseException, e:
+                    self.send_error(e.id, str(e))
+                    continue
+                self.logger.debug('RECV: %s, %s, %s' % tuple(frame))
+                self._frame_queue.put(frame)
+        
+        self._active_loop = None
+        self._cleanup()
+        self.logger.debug('put Connection Lost in the queue')
+        self._frame_queue.put(errors.ConnectionLost("Connection Lost"))
 
     def recv_frame(self):
-        ev = eventlet.event.Event()
-        if self._frame_queue.qsize():
-            self._recv_frame(ev)
-            return ev
-        else:
-            eventlet.spawn(self._recv_frame, ev)
-        return ev
-        
-    def _recv_frame(self, ev):
         frame = self._frame_queue.get()
         if isinstance(frame, Exception):
-            print 'frame is an exception', frame
-            ev.send_exception(frame)
+            raise frame
         else:
-            ev.send(frame)
+            return frame
 
     def send_frame(self, name, args={}):
         if not self._sock:
@@ -144,13 +118,9 @@ class RTJPConnection(object):
         self.frame_id += 1
         self.logger.debug('SEND: %s, %s, %s' % (self.frame_id, name, args))
         buffer = core.serialize_frame(self.frame_id, name, args)
-        e = eventlet.event.Event()
-        eventlet.spawn(self._send_frame, self.frame_id, buffer, e)
-        return e
         
-    def _send_frame(self, id, buffer, ev):
-        if not self._connected:
-            ev.send_exception(Exception("Not Connected"))
+        if not self._active_loop:
+            raise Exception("Not Connected")
             return
         try:
             try:
@@ -164,12 +134,11 @@ class RTJPConnection(object):
                     self._sock.close()
                 except:
                     pass
-                ev.send_exception(*sys.exc_info())
+                raise
             else:
-                ev.send(id)
+                return id
         finally:
             self._send_lock.release()
-            
-            
+        
     def send_error(self, reference_id, msg):
         self.send_frame('ERROR', { 'id': reference_id, 'msg': str(msg) })
