@@ -114,14 +114,13 @@ class RTJPConnection(object):
 
     def send_frame(self, name, args={}):
         if not self._sock:
-            raise Exception("Not Connected")
+            raise errors.NotConnected()
         self.frame_id += 1
         self.logger.debug('SEND: %s, %s, %s' % (self.frame_id, name, args))
         buffer = core.serialize_frame(self.frame_id, name, args)
         
         if not self._active_loop:
-            raise Exception("Not Connected")
-            return
+            raise errors.NotConnected()
         try:
             try:
                 self._send_lock.acquire()
