@@ -3,3 +3,6 @@ class QuitLoop(Exception):
 
 class ConnectionLost(Exception):
     pass
+
+class NotConnected(Exception):
+    pass
