@@ -5,6 +5,7 @@ import logging
 import core
 import errors
 #from .. import core
+import socket
 
 logging.basicConfig()
 logger = logging.getLogger('rtjp')
@@ -29,11 +30,19 @@ class RTJPServer(object):
         eventlet.spawn(self._run)
         return ev
         
+    def close(self):
+        if self._sock:
+            self._sock.close()
+            self._sock = None
+        
     def _run(self):
         while True:
-            sock, addr = self._sock.accept()
-            self.logger.debug('accepted connection sock: %s, addr: %s', sock, addr)
-            self._accept_queue.put(RTJPConnection(sock=sock, addr=addr))
+            try:
+                sock, addr = self._sock.accept()
+                self.logger.debug('accepted connection sock: %s, addr: %s', sock, addr)
+                self._accept_queue.put(RTJPConnection(sock=sock, addr=addr))
+            except socket.error:
+                break
             
     def accept(self):
         conn = self._accept_queue.get()
