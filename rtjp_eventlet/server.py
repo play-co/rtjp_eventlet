@@ -66,14 +66,13 @@ class RTJPConnection(object):
         self._connect(host, port)
         
     def close(self):
-        if self._active_loop:
-            self._active_loop.throw(errors.QuitLoop())
+        self._cleanup()
         
     def _cleanup(self):
         if self._active_loop:
             loop = self._active_loop
             self._active_loop = None
-            loop.throw(errors.QuitLoop())
+            eventlet.spawn(loop.throw, errors.QuitLoop()).wait()
         if self._sock:
             sock = self._sock
             self._sock = None
@@ -112,7 +111,7 @@ class RTJPConnection(object):
         self._active_loop = None
         self._cleanup()
         self.logger.debug('put Connection Lost in the queue')
-        self._frame_queue.put(errors.ConnectionLost("Connection Lost"))
+        self._frame_queue.put(errors.ConnectionLost("Connection Lost"), False)
 
     def recv_frame(self):
         frame = self._frame_queue.get()
