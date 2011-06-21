@@ -72,7 +72,8 @@ class RTJPConnection(object):
         if self._active_loop:
             loop = self._active_loop
             self._active_loop = None
-            eventlet.spawn(loop.throw, errors.QuitLoop()).wait()
+            eventlet.kill(loop, errors.QuitLoop())
+            #eventlet.spawn(loop.throw, errors.QuitLoop()).wait()
         if self._sock:
             sock = self._sock
             self._sock = None
