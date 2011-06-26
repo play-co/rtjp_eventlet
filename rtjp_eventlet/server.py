@@ -20,7 +20,7 @@ class RTJPServer(object):
         
     def listen(self, port=None, interface="", sock=None):
         if not (sock or port):
-            raise Exception("listen requires either a listening sock or port")
+            raise ValueError("listen requires either a listening sock or port")
         if sock:
             self._sock = sock
         else:
@@ -72,8 +72,7 @@ class RTJPConnection(object):
         if self._active_loop:
             loop = self._active_loop
             self._active_loop = None
-            eventlet.kill(loop, errors.QuitLoop())
-            #eventlet.spawn(loop.throw, errors.QuitLoop()).wait()
+            eventlet.kill(loop)
         if self._sock:
             sock = self._sock
             self._sock = None
@@ -90,9 +89,7 @@ class RTJPConnection(object):
             try:
                 data = self._sock.recv(1024)
                 self.logger.debug('RECV %s: %s', self, repr(data))
-            except errors.QuitLoop:
-                break
-            except Exception, e:
+            except StandardError, e:
                 self.logger.error('%s Error while reading from self._sock', e, exc_info=True)
                 break
             if not data:
@@ -135,12 +132,12 @@ class RTJPConnection(object):
                 self._send_lock.acquire()
                 self._sock.sendall(buffer)
                 self.logger.debug('SENT %s: %s', self, repr(buffer))
-            except Exception, e:
+            except StandardError, e:
                 self.logger.exception('%s Error sending payload %s', self, repr(buffer))
                 try:
                     self._sock.shutdown()
                     self._sock.close()
-                except:
+                except StandardError:
                     pass
                 raise
             else:

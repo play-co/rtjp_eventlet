@@ -5,16 +5,16 @@ except ImportError:
     import simplejson as json
 logger = logging.getLogger('rtjp.core')
 
-class RTJPParseException(Exception):
+class RTJPParseException(StandardError):
     def __init__(self, msg="", id=None):
-        Exception.__init__(self, msg)
+        StandardError.__init__(self, msg)
         self.id = id
 
 def deserialize_frame(line):
     id = None
     try:
         frame = json.loads(line)
-    except:
+    except StandardError:
         logger.debug("Error parsing frame: %s", repr(line), exc_info=True)
         raise RTJPParseException("Invalid json", id)        
     if not isinstance(frame, list):

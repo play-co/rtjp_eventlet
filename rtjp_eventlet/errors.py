@@ -1,8 +1,5 @@
-class QuitLoop(Exception):
+class ConnectionLost(StandardError):
     pass
 
-class ConnectionLost(Exception):
-    pass
-
-class NotConnected(Exception):
+class NotConnected(StandardError):
     pass
