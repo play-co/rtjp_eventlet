@@ -89,7 +89,9 @@ class RTJPConnection(object):
             try:
                 data = self._sock.recv(1024)
                 self.logger.debug('RECV %s: %s', self, repr(data))
-            except StandardError, e:
+            except (SystemExit, KeyboardInterrupt, eventlet.greenlet.GreenletExit):
+                break
+            except Exception, e:
                 self.logger.error('%s Error while reading from self._sock', e, exc_info=True)
                 break
             if not data:
@@ -132,16 +134,17 @@ class RTJPConnection(object):
                 self._send_lock.acquire()
                 self._sock.sendall(buffer)
                 self.logger.debug('SENT %s: %s', self, repr(buffer))
-            except StandardError, e:
+                
+            except Exception, e:
                 self.logger.exception('%s Error sending payload %s', self, repr(buffer))
                 try:
                     self._sock.shutdown()
                     self._sock.close()
-                except StandardError:
+                except Exception:
                     pass
                 raise
             else:
-                return id
+                return self.frame_id
         finally:
             self._send_lock.release()
         

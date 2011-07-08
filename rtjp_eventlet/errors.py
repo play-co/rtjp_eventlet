@@ -1,5 +1,5 @@
-class ConnectionLost(StandardError):
+class ConnectionLost(Exception):
     pass
 
-class NotConnected(StandardError):
+class NotConnected(Exception):
     pass
