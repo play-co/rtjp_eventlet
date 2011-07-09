@@ -127,7 +127,7 @@ class RTJPConnection(object):
         self.logger.debug('SEND: %s, %s, %s' % (self.frame_id, name, args))
         buffer = core.serialize_frame(self.frame_id, name, args)
         
-        if not self._active_loop:
+        if self._active_loop is None:
             raise errors.NotConnected()
         try:
             try:
